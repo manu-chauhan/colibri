@@ -242,6 +242,23 @@ int main(void){
     CHECK(kv_disk_load(&m,hist2,16)==0, "v4 under KV8 must be rejected");
     g_kv8=0;
 
+    /* ---- a token id outside the vocabulary (damaged or hand-edited file) ends the
+     * history at that record, the way a short read does ---- */
+    for(int bad=0;bad<2;bad++){
+        int histbad[5]={11,22,bad?-1:m.c.vocab,44,55};
+        if(m.kv->disk_fp){ fclose(m.kv->disk_fp); m.kv->disk_fp=NULL; }
+        remove(PATH);
+        kv_alloc(&m,16); m.kv->disk_nrec=0;
+        kv_disk_append(&m,histbad,NP);
+        if(m.kv->disk_fp){ fclose(m.kv->disk_fp); m.kv->disk_fp=NULL; }
+        kv_alloc(&m,16); m.kv->disk_nrec=0;
+        for(int p=0;p<16;p++) hist2[p]=-7;
+        CHECK(kv_disk_load(&m,hist2,16)==2, "token id %d must end the history at record 2", histbad[2]);
+        CHECK(m.kv->disk_nrec==2, "bad token id leaves disk_nrec=2, got %d", m.kv->disk_nrec);
+        CHECK(hist2[0]==11 && hist2[1]==22 && hist2[2]==-7, "bad token id: only records before it restored");
+    }
+    if(m.kv->disk_fp){ fclose(m.kv->disk_fp); m.kv->disk_fp=NULL; }
+
     remove(PATH);
     if(fails){ fprintf(stderr,"%d failure(s)\n",fails); return 1; }
     printf("OK kv_disk v1/v2/v3/v4 round-trip + upgrade + reject + self-heal\n");
